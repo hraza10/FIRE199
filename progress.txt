@@ -1,0 +1,6 @@
+local coordinate system
+adjacency list creator
+matlab to python
+different styles of storing large amounts of data
+separating the steps into different scripts
+minimizing the number of times we need to run the scripts
