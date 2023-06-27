@@ -1,16 +1,14 @@
 """ This version uses a different formatting when converting the date string to a date time object. """
-import csv
-import gpxpy
-import numpy as np
-import os 
-import pandas as pd
-
 folder_path = 'gpx_files'
 csv_folder = 'csv_files' 
 raw_folder = 'raw_data_files'
 
 # Gets a list of all files in gpx_files
 gpx_list = os.listdir(folder_path)
+
+# Convert date string to datetime object
+def convert_to_datetime(t):
+    return pd.to_datetime(t, format='%Y-%m-%d %H:%M:%S%z')
 
 def gpx_to_csv(gpx_file, csv_file): 
     # Opens GPX file
@@ -33,18 +31,34 @@ def gpx_to_csv(gpx_file, csv_file):
                 for point in segment.points:
                     csv_writer.writerow([point.latitude, point.latitude, point.time])
                     
-                    
+def merge_close_nodes(nodes, edges, eps):
+    db = DBSCAN(eps=eps, min_samples=1).fit(nodes)
+    labels = db.labels_
+
+    # average out the nodes in the same cluster
+    new_nodes = []
+    for label in set(labels):
+        new_nodes.append(np.mean(nodes[labels == label], axis=0))
+
+    # update the edges to reflect the merged nodes
+    new_edges = []
+    for edge in edges:
+        new_edge = edge.copy()
+        for i, node in enumerate(nodes):
+            if distance.euclidean(new_edge[:2], node) <= eps:
+                new_edge[:2] = new_nodes[labels[i]][:2]
+            if distance.euclidean(new_edge[2:4], node) <= eps:
+                new_edge[2:4] = new_nodes[labels[i]][:2]
+        new_edges.append(new_edge)
+
+    return np.array(new_nodes), new_edges
+
+# Converts CSV file to numpy array. 
 def read_csv_data(file_path): 
     with open(file_path, 'r') as f:
         reader = csv.reader(f, delimiter = ',')
         data = [row for row in reader]
     return np.array(data, dtype=float)
-
-
-
-# Convert date string to datetime object
-def convert_to_datetime(t):
-    return pd.to_datetime(t, format='%Y-%m-%d %H:%M:%S%z')
 
 
 # Calculate the time difference in seconds
@@ -93,32 +107,33 @@ for file_name in gpx_list:
             np.savetxt(f, output, delimiter=",", fmt='%s')
             
         data = read_csv_data('raw_data.csv')
-        # Create unique nodes using the [0, 1] coordinate pairs
-        nodes = np.unique(data[:, [0, 1]], axis=0)
-        # Go through each row's [2, 3] coordinate pair, if it is not in nodes list, add it
-        for row in data:
-            additional_node = row[[2, 3]]
-            if not any(np.array_equal(additional_node, node) for node in nodes):
-                nodes = np.concatenate((nodes, additional_node.reshape(1, -1)))
 
-        # Write unique nodes to file
-        with open('nodes.csv', 'w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerows(nodes)
+        # Create unique nodes using the [0, 1] and [2, 3] coordinate pairs
+        nodes = np.vstack((data[:, [0, 1]], data[:, [2, 3]]))
+        edges = data.tolist()
+
+        # Merge nodes that are too close
+        eps = 0.00008
+        nodes, edges = merge_close_nodes(nodes, edges, eps)
 
         # Create a dictionary to map nodes to indices
         node_to_index = {tuple(node): idx for idx, node in enumerate(nodes)}
 
         # Prepare edge data with indices
-        edges = []
-        for row in data:
-            node1 = tuple(row[[0, 1]])
-            node2 = tuple(row[[2, 3]])
-            weight = row[4]
+        new_edges = []
+        for edge in edges:
+            node1 = tuple(edge[:2])
+            node2 = tuple(edge[2:4])
+            weight = edge[4]
 
-            edges.append([node_to_index[node1], node_to_index[node2], weight])
+            new_edges.append([node_to_index[node1], node_to_index[node2], weight])
 
         # Write edge data to file
         with open('edges.csv', 'w', newline='') as f:
             writer = csv.writer(f)
-            writer.writerows(edges)
+            writer.writerows(new_edges)
+
+        # Write unique nodes to file
+        with open('nodes.csv', 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerows(nodes)        
