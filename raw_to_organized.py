@@ -54,6 +54,9 @@ for edge in edges:
     node2 = tuple(edge[2:4])
     weight = edge[4]
 
+    if node1 == node2:
+        continue
+
     new_edges.append([node_to_index[node1], node_to_index[node2], weight])
 
 # Write edge data to file

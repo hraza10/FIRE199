@@ -4,6 +4,7 @@ import geopandas as gpd
 import folium
 from scipy.sparse.csgraph import shortest_path
 from scipy.sparse import csr_matrix
+import sys
 
 origin = [38.98691761313879, -76.94256431247602]  # (0, 0)
 
@@ -74,10 +75,17 @@ def construct_path(start, end, predecessors):
 
 
 def draw_optimal_route(file_path, start, end, predecessors):
+    # Check if there is a path between start and end
+    if predecessors[start, end] == -9999:
+        print(f"No path exists between node {start} and node {end}.")
+        sys.exit();
+
     data = read_csv_data(file_path)
 
     # Construct the path
     path = construct_path(start, end, predecessors)
+
+    print(f"The computed path is: {path}")
 
     # Create a GeoDataFrame from the data of nodes in the path
     gdf = gpd.GeoDataFrame(
@@ -103,19 +111,19 @@ def draw_optimal_route(file_path, start, end, predecessors):
 
     # Add the lines in the path to the map
     for i in range(len(path) - 1):
-        start_node = gdf.loc[path[i], 'geometry']
-        end_node = gdf.loc[path[i + 1], 'geometry']
+        start_node = gdf.iloc[i]['geometry']
+        end_node = gdf.iloc[i + 1]['geometry']
         folium.PolyLine([(start_node.y, start_node.x), (end_node.y, end_node.x)], color='green').add_to(m)
 
     return m
 
 
 # Plot all data points
-map_all = plot_all_data_on_map('nodes.csv')
-map_all.save('my_map_all.html')
-webbrowser.open('my_map_all.html', new=2)
+# map_all = plot_all_data_on_map('nodes.csv')
+# map_all.save('my_map_all.html')
+# webbrowser.open('my_map_all.html', new=2)
 
 # Plot optimal route between two nodes
-# map_obj = draw_optimal_route('nodes.csv', 0, 9, predecessors)
-# map_obj.save('my_map.html')
-# webbrowser.open('my_map.html', new=2)
+map_obj = draw_optimal_route('nodes.csv', 20, 100, predecessors)
+map_obj.save('my_map.html')
+webbrowser.open('my_map.html', new=2)
