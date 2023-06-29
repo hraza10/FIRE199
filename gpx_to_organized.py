@@ -72,7 +72,10 @@ def read_csv_data(file_path):
 def time_difference(t1, t2):
     return (t2 - t1).total_seconds()
 
-                    
+# Creates folder for csv files if no such folder exists.
+if not os.path.exists(csv_folder):
+    os.makedirs(csv_folder)
+
 # Iterates over each of the files.
 for file_name in gpx_list:
     file_path = os.path.join(folder_path, file_name)
@@ -96,7 +99,7 @@ for file_name in gpx_list:
 
         # Prepare output data
         output = []
-        for i in range(1, len(data)):
+        for i in range(1, len(data), 2):
             output.append([
             "{:.10f}".format(data[i - 1, 1]),  # Coordinate 1 lat
             "{:.10f}".format(data[i - 1, 0]),  # Coordinate 1 long
@@ -104,14 +107,13 @@ for file_name in gpx_list:
             "{:.10f}".format(data[i, 0]),      # Coordinate 2 long
             time_difference(data[i - 1, 2], data[i, 2])  # Time difference
             ])
-
             
-# Convert the output list to a numpy array
-output = np.array(output)
+        # Convert the output list to a numpy array
+        output = np.array(output)
 
-# Append output to CSV file
-with open('raw_data.csv', 'a', newline='') as f:
-    np.savetxt(f, output, delimiter=",", fmt='%s')
+        # Append output to CSV file
+        with open('raw_data.csv', 'a', newline='') as f:
+            np.savetxt(f, output, delimiter=",", fmt='%s')
 
 data = read_csv_data('raw_data.csv')
 
@@ -132,7 +134,7 @@ for edge in edges:
     node1 = tuple(edge[:2])
     node2 = tuple(edge[2:4])
     weight = edge[4]
-
+    
     if node1 == node2:
         continue
         
