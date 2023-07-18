@@ -3,6 +3,8 @@
 
 import customtkinter as ctk
 from tkintermapview import TkinterMapView
+import subprocess
+import sys
 
 ctk.set_default_color_theme("blue")
 
@@ -162,11 +164,20 @@ class App(ctk.CTk):
         self.latitude_value1.configure(text = "------------")
         self.longitude_value2.configure(text = "------------")
         self.latitude_value2.configure(text = "------------")
-        
+
     def calculate_route(self):
-        print("Hello World")
-        
-    def change_map(self, new_map: str): 
+        if len(self.start_marker_list) == 0 or len(self.end_marker_list) == 0:
+            print("Start or End marker not set")
+            return
+
+        start_longitude = self.longitude_value1.cget("text")
+        start_latitude = self.latitude_value1.cget("text")
+        end_longitude = self.longitude_value2.cget("text")
+        end_latitude = self.latitude_value2.cget("text")
+
+        subprocess.call([sys.executable, "main.py", start_longitude, start_latitude, end_longitude, end_latitude])
+
+    def change_map(self, new_map: str):
         if new_map == "OpenStreetMap":
             self.map_widget.set_tile_server("https://a.tile.openstreetmap.org/{z}/{x}/{y}.png")
         elif new_map == "Google Normal":
