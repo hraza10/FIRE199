@@ -5,10 +5,11 @@ import os
 import pandas as pd
 from sklearn.cluster import DBSCAN
 from scipy.spatial import distance
-
+from scipy.spatial import cKDTree
+from sklearn.metrics.pairwise import haversine_distances
+from math import radians
 folder_path = 'gpx_files'
 csv_folder = 'csv_files' 
-raw_folder = 'raw_data_files'
 
 # Gets a list of all files in gpx_files
 gpx_list = os.listdir(folder_path)
@@ -38,27 +39,30 @@ def gpx_to_csv(gpx_file, csv_file):
                 for point in segment.points:
                     csv_writer.writerow([point.latitude, point.longitude, point.time])
                     
+                    
 def merge_close_nodes(nodes, edges, eps):
-    db = DBSCAN(eps=eps, min_samples=1).fit(nodes)
+    db = DBSCAN(eps=eps, min_samples=1, algorithm = 'ball_tree', metric = 'haversine').fit(np.radians(nodes))
     labels = db.labels_
 
-    # average out the nodes in the same cluster
-    new_nodes = []
-    for label in set(labels):
-        new_nodes.append(np.mean(nodes[labels == label], axis=0))
-
-    # update the edges to reflect the merged nodes
-    new_edges = []
-    for edge in edges:
-        new_edge = edge.copy()
-        for i, node in enumerate(nodes):
-            if distance.euclidean(new_edge[:2], node) <= eps:
-                new_edge[:2] = new_nodes[labels[i]][:2]
-            if distance.euclidean(new_edge[2:4], node) <= eps:
-                new_edge[2:4] = new_nodes[labels[i]][:2]
-        new_edges.append(new_edge)
-
-    return np.array(new_nodes), new_edges
+    # return the average of each unique cluster
+    unique_labels = np.unique(labels)
+    new_nodes = np.zeros((len(unique_labels), 2))
+    for i, label in enumerate(unique_labels):
+        new_nodes[i] = np.mean(nodes[labels == label], axis=0)
+    
+    kd_tree = cKDTree(np.radians(nodes))
+    
+    for i, edge in enumerate(edges): 
+        node_coords = np.array([[np.radians(edge[1]), np.radians(edge[0])], 
+                               [np.radians(edge[3]), np.radians(edge[2])]])
+        distances, node_indices = kd_tree.query(node_coords, k = 1)
+        
+        if np.any(distances <= eps):
+            new_edge_coords = new_nodes[labels[node_indices]]
+            edges[i, :2] = new_edge_coords[0]
+            edges[i, 2:4] = new_edge_coords[1]
+            
+    return new_nodes, np.array(edges)
 
 # Converts CSV file to numpy array. 
 def read_csv_data(file_path): 
@@ -75,7 +79,7 @@ def time_difference(t1, t2):
 # Creates folder for csv files if no such folder exists.
 if not os.path.exists(csv_folder):
     os.makedirs(csv_folder)
-
+    
 # Iterates over each of the files.
 for file_name in gpx_list:
     file_path = os.path.join(folder_path, file_name)
@@ -99,7 +103,7 @@ for file_name in gpx_list:
 
         # Prepare output data
         output = []
-        for i in range(1, len(data), 2):
+        for i in range(1, len(data)):
             output.append([
             "{:.10f}".format(data[i - 1, 1]),  # Coordinate 1 lat
             "{:.10f}".format(data[i - 1, 0]),  # Coordinate 1 long
@@ -118,16 +122,14 @@ for file_name in gpx_list:
 data = read_csv_data('raw_data.csv')
 
 # Create unique nodes using the [0, 1] and [2, 3] coordinate pairs
-nodes = np.vstack((data[:, [0, 1]], data[:, [2, 3]]))
-edges = data.tolist()
+nodes = np.vstack((data[:, [1, 0]], data[:, [3, 2]]))
+edges = np.array(data.tolist())
 
-# Merge nodes that are too close
-eps = 0.00008
-nodes, edges = merge_close_nodes(nodes, edges, eps)
-
+    
 # Create a dictionary to map nodes to indices
 node_to_index = {tuple(node): idx for idx, node in enumerate(nodes)}
 
+    
 # Prepare edge data with indices
 new_edges = []
 for edge in edges:
@@ -145,7 +147,8 @@ with open('edges.csv', 'w', newline='') as f:
     writer = csv.writer(f)
     writer.writerows(new_edges)
     
+
 # Write unique nodes to file
 with open('nodes.csv', 'w', newline='') as f:
     writer = csv.writer(f)
-    writer.writerows(nodes)        
+    writer.writerows(nodes)   
