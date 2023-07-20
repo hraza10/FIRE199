@@ -44,11 +44,11 @@ def plot_all_data_on_map(file_path):
     for _, row in gdf.iterrows():
         folium.CircleMarker(
             location=[row.geometry.y, row.geometry.x],
-            radius=3,  # Adjust as needed
+            radius=2,
             color='red',
             fill=True,
             fill_color='red',
-            fill_opacity=0.6  # Adjust as needed
+            fill_opacity=0.9
         ).add_to(m)
 
     # Draw all edges between the nodes
@@ -74,50 +74,6 @@ def construct_path(start, end, predecessors):
     path.append(start)
     path.reverse()
     return path
-
-
-def draw_optimal_route(file_path, start, end, predecessors):
-    # Check if there is a path between start and end
-    if predecessors[start, end] == -9999:
-        print(f"No path exists between node {start} and node {end}.")
-        sys.exit();
-
-    data = read_csv_data(file_path)
-
-    # Construct the path
-    path = construct_path(start, end, predecessors)
-
-    print(f"The computed path is: {path}")
-
-    # Create a GeoDataFrame from the data of nodes in the path
-    gdf = gpd.GeoDataFrame(
-        {'id': path},
-        geometry=gpd.points_from_xy(data[path, 1], data[path, 0]),  # Swapped longitude and latitude
-        crs="EPSG:4326"  # this is the coordinate system for GPS
-    )
-
-    # Create a folium map centered at the mean of the coordinates in the path
-    m = folium.Map(location=[data[path, 0].mean(), data[path, 1].mean()],
-                   zoom_start=13)  # Swapped longitude and latitude
-
-    # Add the points in the path to the map
-    for _, row in gdf.iterrows():
-        folium.CircleMarker(
-            location=[row.geometry.y, row.geometry.x],
-            radius=3,  # Adjust as needed
-            color='blue',
-            fill=True,
-            fill_color='blue',
-            fill_opacity=0.6  # Adjust as needed
-        ).add_to(m)
-
-    # Add the lines in the path to the map
-    for i in range(len(path) - 1):
-        start_node = gdf.iloc[i]['geometry']
-        end_node = gdf.iloc[i + 1]['geometry']
-        folium.PolyLine([(start_node.y, start_node.x), (end_node.y, end_node.x)], color='green').add_to(m)
-
-    return m
 
 
 # calculates distance between two sets of longitude and latitude
@@ -159,9 +115,6 @@ def nearest(csv_file, given_lat, given_lon):
 
 # convert from coordinates to indices
 def convert_coord(lat, lon, csv_file):
-    print(lat)
-    print(lon)
-
     with open(csv_file, 'r') as f:
         reader = csv.reader(f)
         count = 0
@@ -173,26 +126,59 @@ def convert_coord(lat, lon, csv_file):
                 count = count + 1
 
 
-def draw_route_from_coordinates(start_coords, end_coords, edges_file='edges.csv', nodes_file='nodes.csv'):
+def draw_route_from_coordinates(start_coords, end_coords, map_all, edges_file='edges.csv', nodes_file='nodes.csv'):
     # Convert from coordinates to indices
     start_index = convert_coord(*nearest(nodes_file, *start_coords), nodes_file)
     end_index = convert_coord(*nearest(nodes_file, *end_coords), nodes_file)
 
-    #print(start_index)
-    #print(end_index)
-
     # Plot optimal route between two nodes
-    map_obj = draw_optimal_route(nodes_file, start_index, end_index, predecessors)
-    map_obj.save('my_map.html')
+    draw_optimal_route(nodes_file, start_index, end_index, map_all, predecessors)
+    map_all.save('my_map.html')
     webbrowser.open('my_map.html', new=2)
+
+
+def draw_optimal_route(file_path, start, end, m, predecessors):
+    # Check if there is a path between start and end
+    if predecessors[start, end] == -9999:
+        print(f"No path exists between node {start} and node {end}.")
+        sys.exit();
+
+    data = read_csv_data(file_path)
+
+    # Construct the path
+    path = construct_path(start, end, predecessors)
+
+    print(f"The computed path is: {path}")
+
+    # Create a GeoDataFrame from the data of nodes in the path
+    gdf = gpd.GeoDataFrame(
+        {'id': path},
+        geometry=gpd.points_from_xy(data[path, 1], data[path, 0]),  # Swapped longitude and latitude
+        crs="EPSG:4326"  # this is the coordinate system for GPS
+    )
+
+    # Add the points in the path to the map
+    for _, row in gdf.iterrows():
+        folium.CircleMarker(
+            location=[row.geometry.y, row.geometry.x],
+            radius=3,  # Adjust as needed
+            color='blue',
+            fill=True,
+            fill_color='blue',
+            fill_opacity=0.6  # Adjust as needed
+        ).add_to(m)
+
+    # Add the lines in the path to the map
+    for i in range(len(path) - 1):
+        start_node = gdf.iloc[i]['geometry']
+        end_node = gdf.iloc[i + 1]['geometry']
+        folium.PolyLine([(start_node.y, start_node.x), (end_node.y, end_node.x)], color='green').add_to(m)
 
 
 start_coords = [sys.argv[1], sys.argv[2]]
 end_coords = [sys.argv[3], sys.argv[4]]
 
-draw_route_from_coordinates(start_coords, end_coords)
-
 # Plot all data points
-# map_all = plot_all_data_on_map('nodes.csv')
-# map_all.save('my_map_all.html')
-# webbrowser.open('my_map_all.html', new=2)
+map_all = plot_all_data_on_map('nodes.csv')
+draw_route_from_coordinates(start_coords, end_coords, map_all)
+
